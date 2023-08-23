@@ -1,0 +1,13 @@
+sample_table: data/samples.tsv
+
+database_path: path_to_databases/ 
+virsorter_path: path_to_virsorter_output/
+atlas_wf: path_to_atlas_output/
+
+checkv_database: databases/checkv-db-v1.0/
+virsorter2_database: virsorter2/nov20/db
+
+c1jar: vcontact/cluster_one-1.0.jar
+inphared_g2g: vcontact/13Jun2023/13Jun2023_vConTACT2_gene_to_genome.csv
+inphared_proteins: vcontact/13Jun2023/13Jun2023_vConTACT2_proteins.faa
+inphared_wo_refseq: vcontact/13Jun2023/13Jun2023_data_excluding_refseq.tsv

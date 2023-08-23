@@ -1,0 +1,45 @@
+## This is a yaml file, defining options for specific rules or by default.
+## The '#' defines a comment.
+## the two spaces at the beginning of rows below rulenames are important.
+## For more information see https://snakemake.readthedocs.io/en/stable/executing/cluster-cloud.html#cluster-execution
+
+# default parameter for all rules
+__default__:
+  #queue: normal
+  nodes: 1
+  account: p1068_krreg
+  partition: accel
+  # mem-per-cpu: 10g
+  mem: 60
+  time: 10 # hours
+  threads: 8
+
+checkV:
+  time: 1
+  threads: 5
+  mem: 25
+
+dereplication:
+  time: 96
+  threads: 20
+  mem: 60
+
+virsorter_votus:
+  time: 24
+  threads: 20
+  mem: 60
+
+dramv:
+  time: 48
+  threads: 20
+  mem: 60
+
+vcontact:
+  time: 72
+  threads: 20
+  mem: 250
+
+graphanalyzer:
+  time: 10
+  threads: 20
+  mem: 60

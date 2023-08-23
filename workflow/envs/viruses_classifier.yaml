@@ -1,0 +1,33 @@
+name: viruses_classifier
+channels:
+  - conda-forge
+  - bioconda
+  - default
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1
+  - _openmp_mutex=4.5
+  - ca-certificates=2023.5.7
+  - certifi=2019.11.28
+  - ld_impl_linux-64=2.40
+  - libffi=3.2.1
+  - libgcc-ng=13.1.0
+  - libgomp=13.1.0
+  - libsqlite=3.42.0
+  - libstdcxx-ng=13.1.0
+  - libzlib=1.2.13
+  - ncurses=6.4
+  - openssl=1.1.1u
+  - pip=20.1.1
+  - python=2.7.15
+  - python_abi=2.7
+  - readline=8.2
+  - setuptools=44.0.0
+  - sqlite=3.42.0
+  - tk=8.6.12
+  - wheel=0.37.1
+  - zlib=1.2.13
+  - pip:
+    - numpy==1.16.6
+    - scikit-learn==0.20.4
+    - scipy==1.2.3

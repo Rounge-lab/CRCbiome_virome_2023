@@ -1,0 +1,605 @@
+import pandas as pd
+import re
+import random
+import string
+import os
+import csv
+
+configfile: "config/config.yaml"
+
+sampleTable=pd.read_csv(config["sample_table"], index_col=0, sep = '\t')
+
+# samples=sampleTable.index.values
+
+## Only select baseline samples
+samples=list(sampleTable[sampleTable['sample_type'] == 'Baseline'].index)
+
+stringency_settings = ["mid", "stringent"]
+
+wildcard_constraints:
+    stringency="\w+"
+
+
+
+localrules: all
+
+rule all:
+    input:
+        ## Checkv
+        expand("data/checkv/{sample}/{state}.fna", sample = samples, state = ["viruses", "proviruses_proc"]),
+        ## Contig stats
+        expand("data/{stringency}/stats/viral_contigs_by_sample.tsv",
+            stringency = stringency_settings),
+        # ## Abundance
+        expand("data/{stringency}/abundance/coverage_table_min{cov_thr}.tsv", 
+            stringency = stringency_settings, cov_thr = [50, 75, 97.5]),
+        expand("data/{stringency}/abundance/cov_stats_combined.tsv", 
+                stringency=stringency_settings),
+        ## virsorter2 after dereplication
+        expand("data/{stringency}/dereplication/virsorter/for-dramv/viral-affi-contigs-for-dramv.tab", 
+            stringency=stringency_settings),
+        ## Prodigal
+        expand("data/{stringency}/proteins/prodigal/proteins.faa", 
+            stringency = stringency_settings),
+        ## Vcontact
+        expand("data/{stringency}/vcontact/genome_by_genome_overview.csv", 
+            stringency=stringency_settings),
+        ## Graphanalyzer
+        expand("data/{stringency}/vcontact/csv_edit_graph.xlsx",
+            stringency=stringency_settings),
+        ## DRAM-v
+        expand("data/{stringency}/dramv/annotations.tsv", 
+            stringency = stringency_settings),
+        expand("data/{stringency}/dramv/distillate/amg_summary.tsv", 
+            stringency = stringency_settings)
+
+
+rule checkV:
+    input:
+        scaffold=config["virsorter_path"]+"{sample}/final-viral-combined.fa"
+    output:
+        checkV_summary="data/checkv/{sample}/quality_summary.tsv",
+        checkV_viruses="data/checkv/{sample}/viruses.fna",
+        checkV_proviruses="data/checkv/{sample}/proviruses.fna",
+        checkV_proviruses_proc="data/checkv/{sample}/proviruses_proc.fna",
+        provirus_full_names="data/checkv/{sample}/proviruses_full_names.txt"
+    params:
+        database=config["database_path"]+config["checkv_database"],
+        out_dir="data/checkv/{sample}/"
+    conda:
+        "envs/checkv.yaml"
+    threads:
+        5
+    shell:
+        """
+            checkv end_to_end {input.scaffold} {params.out_dir} -d {params.database} -t {threads}
+
+            cat {output.checkV_proviruses} | grep ">" > {output.provirus_full_names}
+            cat {output.checkV_proviruses} | sed 's/_1[[:blank:]].*//' > {output.checkV_proviruses_proc}
+        """
+
+localrules: filter_viral_scaffolds
+
+filters = {"mid": '$8~/(Medium-quality|High-quality|Complete)/',
+                "stringent": '$8~/(High-quality|Complete)/',
+                "lenient": '$8~/(Low-quality|Medium-quality|High-quality|Complete)/'}
+
+rule filter_viral_scaffolds:
+    input:
+        checkV_summary="data/checkv/{sample}/quality_summary.tsv",
+        checkV_viruses="data/checkv/{sample}/viruses.fna",
+        checkV_proviruses="data/checkv/{sample}/proviruses_proc.fna",
+    output:
+        filtered_list="data/{stringency}/checkv/{sample}/filtered/checkv_summary.tsv",
+        filtered_contigs=temp("data/{stringency}/checkv/{sample}/filtered/contigs"),
+        filtered_viruses="data/{stringency}/checkv/{sample}/filtered/viruses.fna",
+        filtered_proviruses="data/{stringency}/checkv/{sample}/filtered/proviruses.fna"
+    params:
+        criteria = lambda w: filters.get(w.stringency)
+    conda:
+        "envs/seqtk.yaml"
+    shell:
+        """
+            awk -F '\t' '{params.criteria} {{print $1}}' {input.checkV_summary} > {output.filtered_contigs}
+            awk -F '\t' '{params.criteria}' {input.checkV_summary} > {output.filtered_list}
+            
+            seqtk subseq {input.checkV_viruses} {output.filtered_contigs} > {output.filtered_viruses}
+            seqtk subseq {input.checkV_proviruses} {output.filtered_contigs} > {output.filtered_proviruses}
+        """
+    
+rule contig_stats:
+    input:
+        assembly_stats = expand(config["atlas_wf"]+"{sample}/assembly/contig_stats/postfilter_coverage_stats.txt",
+                            sample = samples),
+        checkv_stats = expand("data/{{stringency}}/checkv/{sample}/filtered/checkv_summary.tsv",
+                            sample = samples),
+    output:
+        contig_stats = "data/{stringency}/stats/viral_contigs_by_sample.tsv"
+    params:
+        min_length = 1500
+    run:
+        with open(output.contig_stats, 'w', newline='') as out_file:
+            tsv_writer = csv.writer(out_file, delimiter='\t')
+            tsv_writer.writerow(["sample_id", "n_contigs_over_threshold", "n_bases_over_threshold", "n_contigs_viral", "n_bases_viral"])
+
+            for assembly_stats_file, checkv_stats_file, sample_name in zip(input.assembly_stats, input.checkv_stats, samples):
+                ass_stats = pd.read_csv(assembly_stats_file, delimiter='\t')
+                checkv = pd.read_csv(checkv_stats_file, delimiter='\t', usecols=[0,1], names=["contig_name", "contig_length"])
+                
+                tsv_writer.writerow([sample_name,
+                                    ass_stats[ass_stats["Length"]>=params.min_length].shape[0],
+                                    ass_stats[ass_stats["Length"]>=params.min_length]["Length"].sum(),
+                                    checkv[checkv["contig_length"]>=params.min_length].shape[0],
+                                    checkv[checkv["contig_length"]>=params.min_length]["contig_length"].sum()])
+
+
+
+localrules: split_fasta_for_galah, gather_checkV_summaries, clear_galah_input_folder
+
+rule gather_checkV_summaries:
+    input:
+        checkV_files=expand("data/{{stringency}}/checkv/{sample}/filtered/checkv_summary.tsv", sample = samples),
+    output:
+        checkV_gathered="data/{stringency}/dereplication/checkV_summary.tsv",
+        checkM_format="data/{stringency}/dereplication/checkM_summary.tsv"
+    script:
+        "scripts/gather_checkV.R"
+
+rule clear_galah_input_folder:
+    input:
+        checkV_gathered="data/{stringency}/dereplication/checkV_summary.tsv"
+    output:
+        clear_flag=temp("data/{stringency}/dereplication/clear_input.flag")
+    params:
+        dir_comb="data/{stringency}/dereplication/split/"
+    shell:
+        """
+            if [ -d {params.dir_comb} ]
+            then
+                if [ "$(ls -A {params.dir_comb})" ]; then
+                for file in {params.dir_comb}*; do rm "$file"; done
+                fi
+            else
+                if [ ! -d {params.dir_comb} ]
+                then
+                    mkdir {params.dir_comb}
+                fi
+            fi
+
+            touch {output.clear_flag}
+        """
+
+rule split_fasta_for_galah:
+    input:
+        filtered_viruses="data/{stringency}/checkv/{sample}/filtered/viruses.fna",
+        filtered_proviruses="data/{stringency}/checkv/{sample}/filtered/proviruses.fna",
+        clear_flag="data/{stringency}/dereplication/clear_input.flag"
+    output:
+        split_flag=temp("data/{stringency}/dereplication/split_flags/{sample}.flag")
+    params:
+        split_dir="data/{stringency}/dereplication/split/"
+    shell:
+        """
+        awk -v FOLDER="{params.split_dir}/" '/^>/ {{ file=FOLDER substr($1,2) ".fna" }} {{ print > file }}' {input.filtered_viruses}
+        awk -v FOLDER="{params.split_dir}/" '/^>/ {{ file=FOLDER substr($1,2) ".fna" }} {{ print > file }}' {input.filtered_proviruses}
+        touch {output.split_flag}
+        """
+
+
+rule dereplication:
+    input:
+        split_flag=expand("data/{{stringency}}/dereplication/split_flags/{sample}.flag", sample = samples),
+        checkM_format="data/{stringency}/dereplication/checkM_summary.tsv"
+    output:
+        clusters="data/{stringency}/dereplication/galah_clusters.tsv",
+    params:
+        dir_comb="data/{stringency}/dereplication/split/",
+        qual_formula = "completeness-5contamination",
+    log:
+        "logs/{stringency}/dereplication/dereplication.log"
+    conda:
+        "envs/galah.yaml"
+    threads:
+        20
+    shell:
+        """
+            galah cluster --genome-fasta-directory {params.dir_comb} \
+                    --output-cluster-definition {output.clusters} \
+                    --ani 97 \
+                    --precluster-ani 95 \
+                    --min-aligned-fraction 70 \
+                    --checkm-tab-table {input.checkM_format} \
+                    --quality-formula {params.qual_formula} \
+                    --threads {threads} &> {log}
+        """
+
+localrules: collect_repr_viral_seqs
+
+rule collect_repr_viral_seqs:
+    input:
+        galah_clusters="data/{stringency}/dereplication/galah_clusters.tsv"
+    output:
+        tmp2=temp("data/{stringency}/dereplication/rename_these.fasta"),
+        genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+        contig_id_file="data/{stringency}/dereplication/old_to_new_ids.tsv"
+    shell:
+        """
+            [ -f {output.genomes} ] && rm {output.genomes}
+            [ -f {output.tmp2} ] && rm {output.tmp2}
+
+            cat $(cut -f -1 {input.galah_clusters} | sort -u) >> {output.tmp2}
+
+            ./workflow/scripts/rename_fasta.py \
+                -i {output.tmp2} \
+                --pre vOTU \
+                -o {output.genomes} \
+                --contig_id_file {output.contig_id_file}
+        """
+
+rule virsorter_votus:
+    input:
+        derep_genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+    output:
+        final_viral_combined="data/{stringency}/dereplication/virsorter/for-dramv/final-viral-combined-for-dramv.fa",
+        dram_file="data/{stringency}/dereplication/virsorter/for-dramv/viral-affi-contigs-for-dramv.tab"
+    params:
+        out_dir="data/{stringency}/dereplication/virsorter",
+        db=config["database_path"]+config["virsorter2_database"],
+        min_length=0
+    conda:
+        "envs/virsorter2.yaml"
+    threads:
+        20
+    shell:
+        """
+        rm -r {params.out_dir}/*
+
+        virsorter run \
+            -w {params.out_dir} \
+            -i {input.derep_genomes} \
+            -d {params.db} \
+            --min-length {params.min_length} \
+            -j {threads} \
+            --prep-for-dramv \
+            --use-conda-off \
+            all \
+            --forceall
+        """
+
+rule dramv:
+    input:
+        derep_genomes="data/{stringency}/dereplication/virsorter/for-dramv/final-viral-combined-for-dramv.fa",
+        virsorter_file="data/{stringency}/dereplication/virsorter/for-dramv/viral-affi-contigs-for-dramv.tab"
+    output:
+        dram_annotations="data/{stringency}/dramv/annotations.tsv",
+    params:
+        out_dir="data/{stringency}/dramv"
+    log:
+        "logs/{stringency}/dramv/dramv.log"
+    conda:
+        "envs/dram.yaml"
+    threads:
+        20
+    shell:
+        """
+        
+        [ -d {params.out_dir} ]  && rm {params.out_dir} -r
+
+        DRAM-v.py annotate \
+            --input_fasta {input.derep_genomes} \
+            --virsorter_affi_contigs {input.virsorter_file} \
+            --output_dir {params.out_dir} \
+            --low_mem_mode \
+            --threads {threads} \
+            >& {log}
+        """
+
+rule add_empty_if_no_vogdb:
+    input:
+        dram_annotations="data/{stringency}/dramv/annotations.tsv"
+    output:
+        dram_annotations_w_vogdb="data/{stringency}/dramv/annotations_w_vogdb.tsv"
+    run:
+        annotations = pd.read_csv(input.dram_annotations, sep='\t')
+
+        if "vogdb_categories" not in annotations.columns:
+            annotations["vogdb_categories"] = ""
+        
+        annotations.to_csv(output.dram_annotations_w_vogdb, index=False, sep='\t')
+
+localrules: dramv_distill
+
+rule dramv_distill:
+    input:
+        dram_annotations="data/{stringency}/dramv/annotations_w_vogdb.tsv"
+    output:
+        amg_summary="data/{stringency}/dramv/distillate/amg_summary.tsv",
+    log:
+        "logs/{stringency}/dramv/dram-distill.log"
+    params:
+        out_dir="data/{stringency}/dramv/distillate/"
+    conda:
+        "envs/dram.yaml"
+    threads:
+        1
+    shell:
+        """
+            rm {params.out_dir} -r
+
+            DRAM-v.py distill \
+                -i {input.dram_annotations} \
+                -o {params.out_dir} &> {log}
+        """
+
+rule map_to_repr_viral_seqs:
+    input:
+        genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+        r1=config["atlas_wf"]+"{sample}/sequence_quality_control/{sample}_QC_R1.fastq.gz",
+        r2=config["atlas_wf"]+"{sample}/sequence_quality_control/{sample}_QC_R2.fastq.gz",
+    output:
+        sam = temp("data/{stringency}/mapping/alignments/{sample}.sam"),
+    params:
+        maxsites = 10, 
+        max_distance_between_pairs = 1000, 
+        paired_only = 't',
+        ambiguous = 'all',
+        min_id = 0.9, 
+        maxindel = 100 
+    shadow:
+        "shallow"
+    log:
+        "logs/calculate_coverage/{stringency}/align_reads_from_{sample}_to_filtered_contigs.log" # this file is udes for assembly report
+    conda:
+        "envs/bbmap.yaml"
+    threads:
+        20
+    resources:
+        mem = 60, 
+        java_mem = int(60 * 0.85) 
+    shell:
+        """
+        bbwrap.sh nodisk=t \
+            ref={input.genomes} \
+            in={input.r1},{input.r2} \
+            trimreaddescriptions=t \
+            out={output.sam} \
+            threads={threads} \
+            pairlen={params.max_distance_between_pairs} \
+            pairedonly={params.paired_only} \
+            minid={params.min_id} \
+            maxindel={params.maxindel} \
+            mdtag=t \
+            xstag=fs \
+            nmtag=t \
+            sam=1.3 \
+            local=t \
+            ambiguous={params.ambiguous} \
+            secondary=t \
+            saa=f \
+            maxsites={params.maxsites} \
+            -Xmx{resources.java_mem}G \
+            2> {log}
+        """
+
+rule pileup:
+    input:
+        genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+        sam = "data/{stringency}/mapping/alignments/{sample}.sam",
+    output:
+        basecov = temp("data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_base_coverage.txt.gz"),
+        covhist = "data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_histogram.txt",
+        covstats = "data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_stats.txt",
+        bincov = "data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_binned.txt"
+    params:
+        pileup_secondary = 't',
+    log:
+        "logs/{stringency}/calculate_coverage/pileup/{sample}.log"
+    conda:
+        "envs/bbmap.yaml"
+    threads:
+        10
+    resources:
+        mem = 60, 
+        java_mem = int(60 * 0.85) 
+    shell:
+        """
+            export OMP_NUM_THREADS={threads}
+
+            pileup.sh ref={input.genomes} in={input.sam} \
+               threads={threads} \
+               -Xmx{resources.java_mem}G \
+               covstats={output.covstats} \
+               hist={output.covhist} \
+               basecov={output.basecov}\
+               concise=t \
+               secondary={params.pileup_secondary} \
+               bincov={output.bincov} 2> {log}
+        """
+
+rule combine_coverage_stats:
+    input:
+        covstats = expand("data/{{stringency}}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_stats.txt",
+                            sample = samples),
+    output:
+        covstats_combined = "data/{stringency}/abundance/cov_stats_combined.tsv"
+    run:
+        with open(output.covstats_combined, 'w', newline='') as out_file:
+            tsv_writer = csv.writer(out_file, delimiter='\t')
+
+            for input_file, sample_name in zip(input.covstats, samples):
+                with open(input_file, 'r') as in_file:
+                    tsv_reader = csv.reader(in_file, delimiter='\t')
+                    if input.covstats.index(input_file) != 0:
+                        next(tsv_reader)
+
+                    for row in tsv_reader:
+                        if row[0] == "#ID":
+                            tsv_writer.writerow(row+["sample_id"])
+                        else:
+                            tsv_writer.writerow(row+[sample_name])
+        
+
+localrules: get_trimmed_coverage
+
+rule get_trimmed_coverage:
+    input:
+        basecov="data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_base_coverage.txt.gz",
+        coverage_stats="data/{stringency}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_stats.txt"
+    output:
+        trimmed_mean="data/{stringency}/abundance/coverage/{sample}/contig_stats/trimmed_mean_coverage.tsv"
+    params:
+        trim_perc=0.05
+    script:
+        "scripts/trimmed_mean.py"
+
+
+localrules: combine_coverage
+
+rule combine_coverage:
+    input:
+        covstats=expand("data/{{stringency}}/abundance/coverage/{sample}/contig_stats/postfilter_coverage_stats.txt", sample = samples)
+    output:
+        abundance_table="data/{stringency}/abundance/coverage_table_min{cov_thr}.tsv"
+    params:
+        min_coverage=lambda w: w.cov_thr
+    conda:
+        "envs/tidyverse.yaml"
+    script:
+        "scripts/combine_coverage.R"
+
+# rule combine_trimmed_coverage:
+#     input:
+#         covstats=expand("data/{{stringency}}/abundance/coverage/{sample}/contig_stats/trimmed_mean_coverage.tsv", sample = samples)
+#     output:
+#         abundance_table="data/{stringency}/abundance/trimmed_coverage_table_min{cov_thr}.tsv"
+#     params:
+#         min_coverage=lambda w: w.cov_thr
+#     conda:
+#         "envs/tidyverse.yaml"
+#     script:
+#         "scripts/combine_coverage.R"
+
+rule prodigal:
+    input:
+        genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+    output:
+        a="data/{stringency}/proteins/prodigal/proteins.faa",
+        o="data/{stringency}/proteins/prodigal/orfs.genes",
+    log:
+        "logs/prodigal/{stringency}.log"
+    conda:
+        "envs/prodigal_env.yaml"
+    threads: 
+        10
+    shell:
+        "prodigal -i {input.genomes} -o {output.o} -a {output.a} -p meta 2> {log}"
+
+rule gene2genome:
+    input:
+        proteins="data/{stringency}/proteins/prodigal/proteins.faa",
+    output:
+        g2g="data/{stringency}/proteins/genes_2_genomes/g2g.csv",
+    log:
+        "logs/gene2genome/{stringency}.log"
+    conda:
+        "envs/vcontact2.yaml"
+    shell:
+        "vcontact2_gene2genome -p {input.proteins} -o {output.g2g} -s 'Prodigal-FAA' 2> {log}"
+
+localrules: inphared_database_combination
+
+rule inphared_database_combination:
+    input:
+        proteins="data/{stringency}/proteins/prodigal/proteins.faa",
+        g2g="data/{stringency}/proteins/genes_2_genomes/g2g.csv"
+    output:
+        proteins="data/{stringency}/inphared/proteins.faa",
+        g2g="data/{stringency}/inphared/g2g.csv"
+    params:
+        proteins=config["database_path"]+config["inphared_proteins"],
+        g2g=config["database_path"]+config["inphared_g2g"]
+    shell:
+        """
+            cat {input.proteins} {params.proteins} > {output.proteins}
+            
+            cat {input.g2g} > {output.g2g}
+            tail -n +2 {params.g2g} >> {output.g2g}
+        """
+
+
+rule vcontact:
+    input:
+        proteins="data/{stringency}/inphared/proteins.faa",
+        g2g="data/{stringency}/inphared/g2g.csv",
+    output:
+        c1="data/{stringency}/vcontact/c1.ntw",
+        gbg="data/{stringency}/vcontact/genome_by_genome_overview.csv",
+    params:
+        outdir="data/{stringency}/vcontact/",
+        c1jar=config["database_path"]+config["c1jar"],
+    log:
+        "logs/vcontact/{stringency}.log"
+    conda:
+        "envs/vcontact2.yaml"
+    threads: 
+        20
+    shell:
+        """
+            [ -n "$(ls -A {params.outdir})" ] && echo "removing old vcontact output" && rm -r {params.outdir}*
+
+            vcontact2 -t {threads} \
+                --raw-proteins {input.proteins} \
+                --rel-mode 'Diamond' \
+                --proteins-fp {input.g2g} \
+                --db 'None' \
+                --pcs-mode MCL \
+                --vcs-mode ClusterONE \
+                --c1-bin {params.c1jar} \
+                --output-dir {params.outdir} 2> {log}
+        """
+
+rule graphanalyzer:
+    input:
+        c1="data/{stringency}/vcontact/c1.ntw",
+        gbg="data/{stringency}/vcontact/genome_by_genome_overview.csv"
+    output:
+        gbg="data/{stringency}/vcontact/csv_edit_graph.xlsx",
+    log:
+        "logs/graphanalyzer/{stringency}.log"
+    params:
+        out_dir="data/{stringency}/vcontact/",
+        dat_excl_refseq=config["database_path"]+config["inphared_wo_refseq"],
+        prefix="vOTU",
+        suffix="graph",
+    conda:
+        "envs/graphanalyzer.yaml"
+    threads:
+        20
+    shell:
+        """
+            python workflow/scripts/graphanalyzer.py \
+                --graph {input.c1} \
+                --csv {input.gbg} \
+                --metas {params.dat_excl_refseq} \
+                --output {params.out_dir} \
+                --prefix {params.prefix} \
+                --suffix {params.suffix} \
+                --threads {threads} &> {log}
+        """
+
+rule assess_phagicity:
+    input:
+        derep_genomes="data/{stringency}/dereplication/repr_viral_seqs.fasta",
+    output:
+        phagicity_probs="data/{stringency}/phagicity/phagicity.tsv"
+    conda:
+        "envs/viruses_classifier.yaml"
+    shell:
+        """
+            virus_classifier \
+                --nucleic_acid DNA \
+                --proba \
+                --classif all \
+                -o {output.phagicity_probs} \
+                {input.derep_genomes}
+        """

@@ -1,0 +1,10 @@
+name: prodigal_environment
+
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+
+dependencies:
+  - prodigal =2.6.3
+  - bbmap
