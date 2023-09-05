@@ -53,10 +53,6 @@ create_vOTU_based_stats()
 # alpha_diversity_calculations()
 # beta_diversity_calculations()
 
-## Evaluate whether virus lifecycle state is affected by participant characteristics
-# source("analyses/scripts/for_manuscript/lifecycle_propensity_by_host_characteristics.R")
-# provirus_host_associations()
-
 # presentations -----------------------------------------------------------
 
 ## Create contig quality plot
