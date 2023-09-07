@@ -240,47 +240,6 @@ create_amg_plots <- function() {
    amgs_per_family_plot %>% 
       ggsave("figures/vOTU_summary/amgs_per_family_heat.png", plot = ., height = 4, width = 3.5)
    
-   
-   amgs_MISC_module_by_vOTU <- 
-      read_tsv("data/amgs/amg_MISC_module_by_vOTU_mid_min75.tsv")
-   
-   amgs_MISC_per_fam_frac <-
-      amgs_MISC_module_by_vOTU %>% 
-      # rename(`Carbon Utilization` = `carbon utilization`) %>%
-      pivot_longer(-vOTU, names_to = "cat", values_to = "presence") %>% 
-      filter(!str_detect(cat, "Wood")) %>% 
-      left_join(vOTU_by_taxonomy_lifecycle %>% select(vOTU, cluster_contigs, Family)) %>% 
-      filter(!is.na(Family)) %>% 
-      group_by(Family, cat) %>% 
-      summarize(with_cat = sum(presence)/n(),
-                sum_with = sum(presence),
-                sum_without = sum(!presence)) %>% 
-      ungroup()
-   
-   amgs_MISC_per_fam_frac
-   
-   amgs_MISC_per_family_plot <-
-      amgs_MISC_per_fam_frac %>%
-      mutate(Family = factor(Family, levels = amgs_MISC_per_fam_frac %>% 
-                                select(-starts_with("sum")) %>% 
-                                pivot_wider(names_from = Family, values_from = with_cat, values_fill = 0) %>% 
-                                column_to_rownames("cat") %>% 
-                                order_by_cluster_columns())) %>% 
-      mutate(cat = factor(cat, levels = amgs_MISC_per_fam_frac %>% 
-                             select(-starts_with("sum")) %>% 
-                             pivot_wider(names_from = cat, values_from = with_cat, values_fill = 0) %>% 
-                             column_to_rownames("Family") %>% 
-                             order_by_cluster_columns())) %>% 
-      ggplot(aes(x = Family, y = cat, fill = with_cat, label = signif(with_cat, 2))) +
-      geom_tile() +
-      geom_text() +
-      theme_bw() +
-      labs(x = "", fill = "", y = "") +
-      theme(axis.text.x = element_text(angle = 40, hjust = 1),
-            panel.grid = element_blank(),
-            panel.border = element_blank()) +
-      scale_fill_gradient(low = "#EFF1F1", high = "#4D27E2", trans = "log10")
-   
    upset_plot <- 
       amgs_cat_per_vOTU %>% 
       select(!`carbon utilization (Woodcroft)`) %>%
