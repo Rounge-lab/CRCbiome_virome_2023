@@ -6,9 +6,6 @@ create_host_associations_figures <- function() {
   alpha_div <- 
     read_rds("data/diversity/alpha_div/alpha_diversity.Rds")
   
-  diversity_metrics_normality <- 
-    read_tsv("data/diversity/alpha_div/diversity_metrics_normality.tsv", show_col_types = FALSE)
-  
   alpha_div_assoc <- 
     read_rds("data/diversity/alpha_div/alpha_associations.Rds")
   
@@ -115,57 +112,6 @@ create_host_associations_figures <- function() {
          x = "log2FC") +
     scale_y_continuous(limits = c(0, 5.5))
   
-  tmp %>% 
-    filter(qval < 0.05) %>%
-    filter(n_samples > 5) #%>% 
-    # View()
-    # pull(vOTU) %>% 
-    # unique() %>% 
-    # length()
-  
-  virus_abundance %>% 
-    select(sample_id, vOTU05693)
-    
-  library(plotly)
-  library(heatmaply)
-  
-  diff_abund_table %>% 
-    filter(dataset %in% "vOTUs") %>% 
-    group_by(feature) %>% 
-    mutate(n_signif = sum(qval < 0.05),
-           n_nom_sign = sum(pval < 0.05)) %>% 
-    # filter(n_signif > 0) %>% 
-    filter(qval < 0.05) %>%
-    count(feature) %>% 
-    arrange(desc(n)) %>% 
-    filter(n > 1)
-  
-  clust_plot_data <- 
-    diff_abund_table %>% 
-    filter(dataset %in% "vOTUs") %>% 
-    group_by(feature) %>% 
-    mutate(n_signif = sum(qval < 0.05),
-           n_nom_sign = sum(pval < 0.05)) %>% 
-    filter(n_signif > 0) %>%
-    left_join(meta_variables %>% select(var_id, var_name) %>% rename(variable = var_id)) %>% 
-    mutate(var = paste(var_name, value, sep = ": ")) %>% 
-    select(feature, var, coef) %>%
-    pivot_wider(names_from = var, values_from = coef, values_fill = 0) 
-  
-  clust_plot_data %>% 
-    as.data.frame() %>% 
-    column_to_rownames("feature") %>% 
-    t() %>% 
-    heatmaply(distfun = "pearson", 
-              colors = c("blue", "white", "red"),
-              col_side_colors = (clust_plot_data %>% 
-                                   select(vOTU = feature) %>% 
-                                   left_join(vOTU_stats %>% select(vOTU, Family)) %>% 
-                                   ungroup() %>% 
-                                   left_join(vOTU_lifecycle_cat %>% select(vOTU, lifecycle_propensity_unadj)) %>% 
-                                   select(Family, lifecycle_propensity_unadj)),
-              showticklabels = c(FALSE,TRUE),
-              file = "figures/diversity_composition/differential_abundance_logFC_heatmap.html")
   
   diversity_composition_diff_abund_plot <- 
       grid.arrange(invsimpson_assoc_cat + labs(subtitle = "a)",
