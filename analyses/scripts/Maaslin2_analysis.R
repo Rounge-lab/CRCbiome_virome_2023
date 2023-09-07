@@ -14,18 +14,12 @@ meta_dat_vars <- read_rds("data/participant_data/metadata_variables.Rds")
 sample_meta <- read_rds("data/participant_data/sample_meta.Rds")
 
 virus_abundance <- read_rds("data/abundance_tables/viral_abundance.Rds")
-amg_cat <- read_tsv("data/amgs/amg_cat_abundance_mid_min75.tsv")
-amg_subhead <- read_tsv("data/amgs/amg_subhead_abundance_mid_min75.tsv")
-amg_module <- read_tsv("data/amgs/amg_module_abundance_mid_min75.tsv")
 
 # run maaslin -------------------------------------------------------------
 
 diff_abund_results <-
-  lapply(c("vOTUs", "amg_cat", "amg_subhead", "amg_module"), function(dataset) {
+  lapply(c("vOTUs"), function(dataset) {
     if (dataset == "vOTUs") tmp_abund <- virus_abundance
-    if (dataset == "amg_cat") tmp_abund <- amg_cat
-    if (dataset == "amg_subhead") tmp_abund <- amg_subhead
-    if (dataset == "amg_module") tmp_abund <- amg_module
     
     tmp_abund <- tmp_abund %>% mutate(sample_id = str_replace(sample_id, "-", "_"))
     
@@ -137,11 +131,8 @@ no_crc_ids <-
   select(deltaker_id)
 
 diff_abund_results <-
-  lapply(c("vOTUs", "amg_cat", "amg_subhead", "amg_module"), function(dataset) {
+  lapply(c("vOTUs"), function(dataset) {
     if (dataset == "vOTUs") tmp_abund <- virus_abundance
-    if (dataset == "amg_cat") tmp_abund <- amg_cat
-    if (dataset == "amg_subhead") tmp_abund <- amg_subhead
-    if (dataset == "amg_module") tmp_abund <- amg_module
     
     tmp_abund <- tmp_abund %>% mutate(sample_id = str_replace(sample_id, "-", "_"))
     
