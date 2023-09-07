@@ -4,17 +4,6 @@
 
 library(Maaslin2)
 
-source("analyses/scripts/utils/utils.R")
-
-# load data ---------------------------------------------------------------
-
-meta_dat <- read_rds("data/participant_data/metadata_selected_variables.Rds")
-meta_dat_vars <- read_rds("data/participant_data/metadata_variables.Rds")
-
-sample_meta <- read_rds("data/participant_data/sample_meta.Rds")
-
-virus_abundance <- read_rds("data/abundance_tables/viral_abundance.Rds")
-
 # run maaslin -------------------------------------------------------------
 
 diff_abund_results <-
@@ -96,7 +85,7 @@ diff_abund_results <-
               column_to_rownames("sample_id"),
             input_metadata = x %>% 
               column_to_rownames("sample_id"),
-            min_prevalence = 0.1,
+            min_prevalence = ifelse(any(grepl("mock", ls())), 0.001, 0.1),
             normalization = ifelse(dataset %in% "vOTUs", "TSS", "NONE"),
             analysis_method = "LM",
             output = paste0("data/diff_abund/", dataset, "/", x$name[1]),
@@ -210,7 +199,7 @@ diff_abund_results <-
               column_to_rownames("sample_id"),
             input_metadata = x %>% 
               column_to_rownames("sample_id"),
-            min_prevalence = 0.1,
+            min_prevalence = ifelse(any(grepl("mock", ls())), 0.001, 0.1),
             normalization = ifelse(dataset %in% "vOTUs", "TSS", "NONE"),
             analysis_method = "LM",
             output = paste0("data/diff_abund/no_crc/", dataset, "/", x$name[1]),
