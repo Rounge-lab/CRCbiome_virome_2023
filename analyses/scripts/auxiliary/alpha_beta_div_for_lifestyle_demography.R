@@ -41,8 +41,8 @@ alpha_diversity_calculations <- function() {
       
       alpha_div %>% 
         left_join(meta_dat %>% 
-                    left_join(sample_data %>% select(deltaker_id, sample_id, Total_Reads_raw_ATLAS)) %>% 
-                    select(sample_id, all_of(i), Total_Reads_raw_ATLAS), by = "sample_id") %>% 
+                    left_join(sample_data %>% select(deltaker_id, sample_id, Total_Reads_QC_ATLAS)) %>% 
+                    select(sample_id, all_of(i), Total_Reads_QC_ATLAS), by = "sample_id") %>% 
         rename("var" = all_of(i)) %>% 
         filter(!is.na(var), !var %in% "Missing", !var %in% "Unknown") %>% 
         pivot_longer(cols = c(shannon, invsimpson, observed), 
@@ -56,7 +56,7 @@ alpha_diversity_calculations <- function() {
           
           tmp <-
             x %>% 
-            lm(diversity~var + Total_Reads_raw_ATLAS, data = .) %>%
+            lm(diversity~var + Total_Reads_QC_ATLAS, data = .) %>%
             aov() 
           tmp %>% 
             tidy() %>% 
@@ -81,37 +81,6 @@ alpha_diversity_calculations <- function() {
 }
 
 beta_diversity_calculations <- function() {
-  ## Percent variation attributed to variable - continuous as is
-  effect_size_cont <- 
-    lapply(meta_variables$var_id, function(i) {
-      
-      print(paste("variable ", which(meta_variables$var_id %in% i), " of ", length(meta_variables$var_id)))
-      
-      tmp_dat <- 
-        virus_abundance %>% 
-        left_join(meta_dat %>% left_join(sample_data %>% select(deltaker_id, sample_id)) %>% select(sample_id, all_of(i)), by = "sample_id") %>% 
-        rename("var" = all_of(i)) %>% 
-        filter(!is.na(var), !var %in% "Missing", !var %in% "Unknown")
-      if (is.factor(tmp_dat$var)) {
-        tmp_dat <-
-          tmp_dat %>% 
-          filter(!var %in% (table(var) %>% enframe() %>% filter(value < 10) %>% pull(name)))
-      }
-      
-      tmp <- 
-        adonis2(tmp_dat %>% select(-c(var, sample_id)) ~ tmp_dat %>% pull(var), method = "bray") %>% 
-        adonis_OmegaSq()
-      
-      tibble("var" = i,
-             "R2" = tmp$aov.tab$R2[1],
-             "parOmegaSq" = tmp$aov.tab$parOmegaSq[1],
-             "p" = tmp$aov.tab$`Pr(>F)`[1], 
-             "df" = tmp$aov.tab$Df[1],
-             "var_details" = tmp_dat %>% pull(var) %>% typeof(),
-             "n" = tmp_dat %>% nrow())
-    }) %>% 
-    bind_rows()
-  
   
   ## Percent variation attributed to variable - tertiles - high v low
   
@@ -150,7 +119,7 @@ beta_diversity_calculations <- function() {
     bind_rows()
   
   
-  save(effect_size_cont, effect_size_cat, file = "data/diversity/beta_div/permanova_tests_lifestyle_demography.RData")
+  save(effect_size_cat, file = "data/diversity/beta_div/permanova_tests_lifestyle_demography.RData")
   
 }
 
@@ -172,8 +141,8 @@ alpha_diversity_calculations_no_crc <- function() {
       alpha_div %>% 
         left_join(meta_dat %>% 
                     inner_join(no_crc_ids, by = "deltaker_id") %>% 
-                    left_join(sample_data %>% select(deltaker_id, sample_id, Total_Reads_raw_ATLAS), by = "deltaker_id") %>% 
-                    select(sample_id, all_of(i), Total_Reads_raw_ATLAS), by = "sample_id") %>% 
+                    left_join(sample_data %>% select(deltaker_id, sample_id, Total_Reads_QC_ATLAS), by = "deltaker_id") %>% 
+                    select(sample_id, all_of(i), Total_Reads_QC_ATLAS), by = "sample_id") %>% 
         rename("var" = all_of(i)) %>% 
         filter(!is.na(var), !var %in% "Missing", !var %in% "Unknown") %>% 
         pivot_longer(cols = c(shannon, invsimpson, observed), 
@@ -187,7 +156,7 @@ alpha_diversity_calculations_no_crc <- function() {
           
           tmp <-
             x %>% 
-            lm(diversity~var + Total_Reads_raw_ATLAS, data = .) %>%
+            lm(diversity~var + Total_Reads_QC_ATLAS, data = .) %>%
             aov() 
           tmp %>% 
             tidy() %>% 
@@ -218,42 +187,7 @@ beta_diversity_calculations_no_crc <- function() {
     filter(!str_detect(final_result, "6. Cancer")) %>% 
     select(deltaker_id)
   
-  ## Percent variation attributed to variable - continuous as is
-  effect_size_cont_no_crc <- 
-    lapply(meta_variables$var_id, function(i) {
-      
-      print(paste("variable ", which(meta_variables$var_id %in% i), " of ", length(meta_variables$var_id)))
-      
-      tmp_dat <- 
-        virus_abundance %>% 
-        left_join(meta_dat %>% 
-                    inner_join(no_crc_ids, by = "deltaker_id") %>% 
-                    left_join(sample_data %>% select(deltaker_id, sample_id)) %>% 
-                    select(sample_id, all_of(i)), by = "sample_id") %>% 
-        rename("var" = all_of(i)) %>% 
-        filter(!is.na(var), !var %in% "Missing", !var %in% "Unknown")
-      if (is.factor(tmp_dat$var)) {
-        tmp_dat <-
-          tmp_dat %>% 
-          filter(!var %in% (table(var) %>% enframe() %>% filter(value < 10) %>% pull(name)))
-      }
-      
-      tmp <- 
-        adonis(tmp_dat %>% select(-c(var, sample_id)) ~ tmp_dat %>% pull(var), method = "bray") %>% 
-        adonis_OmegaSq()
-      tibble("var" = i,
-             "R2" = tmp$aov.tab$R2[1],
-             "parOmegaSq" = tmp$aov.tab$parOmegaSq[1],
-             "p" = tmp$aov.tab$`Pr(>F)`[1], 
-             "df" = tmp$aov.tab$Df[1],
-             "var_details" = tmp_dat %>% pull(var) %>% typeof(),
-             "n" = tmp_dat %>% nrow())
-    }) %>% 
-    bind_rows()
-  
-  
   ## Percent variation attributed to variable - tertiles - high v low
-  
   effect_size_cat_no_crc <- 
     
     lapply(meta_variables$var_id, function(i) {
@@ -292,6 +226,6 @@ beta_diversity_calculations_no_crc <- function() {
     bind_rows()
   
   
-  save(effect_size_cont_no_crc, effect_size_cat_no_crc, file = "data/diversity/beta_div/permanova_tests_lifestyle_demography_no_crc.RData")
+  save(effect_size_cat_no_crc, file = "data/diversity/beta_div/permanova_tests_lifestyle_demography_no_crc.RData")
   
 }
