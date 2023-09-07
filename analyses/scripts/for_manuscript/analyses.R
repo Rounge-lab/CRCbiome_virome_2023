@@ -12,8 +12,6 @@ library(effectsize)
 library(ggrepel)
 library(UpSetR)
 
-setwd("/ess/p1068/data/durable/007-f_smei/001-trro/CRCbiome/papers/Virome/")
-
 # functions ---------------------------------------------------------------
 
 source("analyses/scripts/utils/utils.R")
@@ -49,9 +47,9 @@ create_vOTU_based_stats()
 
 ## Perform diversity and composition analyses
 ## Do PERMANOVA analyses
-# source("analyses/scripts/auxiliary/alpha_beta_div_for_lifestyle_demography.R")
-# alpha_diversity_calculations()
-# beta_diversity_calculations()
+source("analyses/scripts/auxiliary/alpha_beta_div_for_lifestyle_demography.R")
+alpha_diversity_calculations()
+beta_diversity_calculations()
 
 # presentations -----------------------------------------------------------
 
