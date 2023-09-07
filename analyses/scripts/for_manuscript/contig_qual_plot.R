@@ -4,20 +4,6 @@ plot_contig_qual <- function() {
   
   # supplementary figure viral contigs quality ------------------------------
   
-  checkV_res_all_by_sample <-
-    checkv_res_all %>%
-    group_by(sample_id) %>%
-    summarize(avg_contig_len = mean(contig_length),
-              putative_viral_scaffolds = n(),
-              n_complete = sum(checkv_quality %in% "Complete"),
-              n_high_qual = sum(checkv_quality %in% "High-quality"),
-              n_med_qual = sum(checkv_quality %in% "Medium-quality"),
-              n_low_qual = sum(checkv_quality %in% "Low-quality"),
-              n_non_deter = sum(checkv_quality %in% "Not-determined")) %>%
-    ungroup() %>%
-    left_join(sample_data %>% select(sample_id, n_contigs) %>% mutate(sample_id = gsub("_", "-", sample_id)))
-  
-  
   ## S1:CheckV
   n_contigs_per_sample <-
     checkV_res_all_by_sample %>%
