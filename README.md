@@ -18,4 +18,4 @@ R scripts for analysis of data are available in `analyses/`. Required R packages
 
 To test the scripts, mock datasets for 1000 samples and a subset of the viral genomes identified in the study are available in the folder `mock_datasets`. To run the a mock analysis, run the script called `analyses/scripts/run_mock_analysis.R`. The working directory for the script should be the repository folder. Running the mock datasets should take less than one hour on a regular desktop computer and will result in generation of statsitical tests, figures and tables reported in the manuscript, albeit with limited associations due to the random generation of input data.
 
-
+This project is licensed under the MIT License - see the LICENSE file for details.
