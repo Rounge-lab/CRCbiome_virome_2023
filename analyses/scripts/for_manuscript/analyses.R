@@ -12,9 +12,13 @@ library(effectsize)
 library(ggrepel)
 library(UpSetR)
 
+script_folder <- "analyses/scripts/"
+
+if ("mock" %in% ls()) script_folder <- paste0("../", script_folder)
+
 # functions ---------------------------------------------------------------
 
-source("analyses/scripts/utils/utils.R")
+source(paste0(script_folder, "utils/utils.R"))
 
 # preprocessing -----------------------------------------------------------
 
@@ -32,7 +36,7 @@ virus_abundance <- read_rds("data/abundance_tables/viral_abundance.Rds")
 # fraction_viral <- read_tsv("data/abundance_tables/fraction_viral_contigs.tsv")
 
 vOTU_stats <- read_tsv("data/vOTU_stats/vOTU_stats.tsv")
-vOTU_lifecycle_cat <- read_tsv("data/vOTU_stats/vOTU_lyfecycle_cat.tsv")
+# vOTU_lifecycle_cat <- read_tsv("data/vOTU_stats/vOTU_lyfecycle_cat.tsv")
 amgs_cat_per_vOTU <- read_tsv("data/amgs/amg_cat_by_vOTU_mid_min75.tsv")
 
 checkv_res_all <- read_rds("data/abundance_tables/checkV_results_all.Rds")
@@ -42,31 +46,31 @@ checkV_res_all_by_sample <- read_rds("data/abundance_tables/checkV_results_by_sa
 # Data generation tasks ---------------------------------------------------
 
 ## Summarize vOTU stats
-source("analyses/scripts/for_manuscript/vOTU_based_stats.R")
+source(paste0(script_folder, "for_manuscript/vOTU_based_stats.R"))
 create_vOTU_based_stats()
 
 ## Perform diversity and composition analyses
 ## Do PERMANOVA analyses
-source("analyses/scripts/auxiliary/alpha_beta_div_for_lifestyle_demography.R")
+source(paste0(script_folder, "auxiliary/alpha_beta_div_for_lifestyle_demography.R"))
 alpha_diversity_calculations()
 beta_diversity_calculations()
 
 # presentations -----------------------------------------------------------
 
 ## Create contig quality plot
-source("analyses/scripts/for_manuscript/contig_qual_plot.R")
+source(paste0(script_folder, "for_manuscript/contig_qual_plot.R"))
 plot_contig_qual()
 
 ## Create technical plot
-source("analyses/scripts/for_manuscript/technical_plot.R")
+source(paste0(script_folder, "for_manuscript/technical_plot.R"))
 create_technical_fig()
 
 ## Create annotation plot
-source("analyses/scripts/for_manuscript/vOTU_descriptive_plot.R")
+source(paste0(script_folder, "for_manuscript/vOTU_descriptive_plot.R"))
 make_vOTU_descriptive_plots()
 create_amg_plots()
 
 ## Create host associations plot
-source("analyses/scripts/for_manuscript/host_associations_plot.R")
+source(paste0(script_folder, "for_manuscript/host_associations_plot.R"))
 create_host_associations_figures()
 

@@ -176,13 +176,7 @@ create_virus_taxonomy_lifecycle_table <- function(vir_abund, vir_stats, vir_life
     mutate(Family = case_when(fam_count < min_n_for_summary ~ "Other",
                               Family %in% "n.a." ~ "Unknown",
                               Family %in% "Unclassified" ~ "Higher order",
-                              TRUE ~ Family)) %>% 
-    mutate(lifecycle_propensity_adj = factor(lifecycle_propensity_adj, levels = c("exclusively lysogenic", 
-                                                                                  "predominantly lysogenic", 
-                                                                                  "no difference", 
-                                                                                  "predominantly lytic", 
-                                                                                  "exclusively lytic", 
-                                                                                  "unknown")))
+                              TRUE ~ Family)) 
   
   fam_counts <- tmp_table %>% 
     count(Family) %>% 
