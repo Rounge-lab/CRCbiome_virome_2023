@@ -1,4 +1,5 @@
 
+library(tidyverse)
 
 norm_with_min <- function(n, m, s, min_val) {
   rnorm(n = n, mean = m, sd = s) %>% enframe() %>% mutate(value = case_when(value < min_val ~ value+abs(min(value))+min_val, TRUE ~ value)) %>% pull(value)
@@ -169,8 +170,6 @@ virus_abundance %>%
 
 vOTU_stats %>% 
   write_tsv("data/vOTU_stats/vOTU_stats.tsv")
-vOTU_lifecycle_cat %>% 
-  write_tsv("data/vOTU_stats/vOTU_lyfecycle_cat.tsv")
 amgs_cat_per_vOTU %>% 
   write_tsv("data/amgs/amg_cat_by_vOTU_mid_min75.tsv")
 
